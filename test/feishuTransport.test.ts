@@ -72,6 +72,55 @@ describe("Feishu transport", function () {
     assert.equal((caught as FeishuError).code, 99991679);
   });
 
+  it("never retries a non-idempotent creation after an uncertain server failure", async function () {
+    let calls = 0;
+    Zotero.HTTP.request = (async () => {
+      calls++;
+      return {
+        status: 500,
+        response: { code: 500, msg: "Uncertain creation" },
+      } as any;
+    }) as typeof Zotero.HTTP.request;
+    try {
+      await createTransport("token").request(
+        "POST",
+        "/wiki/v2/spaces/space/nodes",
+        {},
+        { retry: false },
+      );
+      assert.fail("Expected server failure");
+    } catch (error) {
+      assert.instanceOf(error, FeishuError);
+    }
+    assert.equal(calls, 1);
+  });
+
+  it("marks dispatch only after token access succeeds", async function () {
+    let sent = false;
+    const transport = new FeishuTransport({
+      getAccessToken: async () => {
+        throw new Error("Token failure");
+      },
+    } as unknown as OAuthService);
+    try {
+      await transport.request(
+        "POST",
+        "/wiki/v2/spaces/space/nodes",
+        {},
+        {
+          retry: false,
+          beforeSend: () => {
+            sent = true;
+          },
+        },
+      );
+      assert.fail("Expected token failure");
+    } catch (error) {
+      assert.include(String(error), "Token failure");
+    }
+    assert.isFalse(sent);
+  });
+
   it("loads the current user's display name", async function () {
     let receivedUrl = "";
     Zotero.HTTP.request = (async (_method, url) => {

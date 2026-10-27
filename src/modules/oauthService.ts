@@ -2,8 +2,7 @@ import { getPref, setPref } from "../utils/prefs";
 import { CredentialStore } from "./credentialStore";
 import {
   FeishuDeviceAuth,
-  BITABLE_SCOPES,
-  FEISHU_SCOPES,
+  requiredFeishuScopes,
   InvalidFeishuApplicationError,
   type ProgressCallback,
   type RegisteredApp,
@@ -35,15 +34,15 @@ export class OAuthService {
   private disposed = false;
 
   constructor(
-    private readonly deviceAuth = new FeishuDeviceAuth(undefined, () =>
-      getPref("targetBase") ? BITABLE_SCOPES : FEISHU_SCOPES,
+    private readonly deviceAuth = new FeishuDeviceAuth(
+      undefined,
+      requiredFeishuScopes,
     ),
     private readonly credentials = new CredentialStore(),
     private readonly dependencies: OAuthServiceDependencies = {
       requestToken: tokenRequest,
       now: () => Date.now(),
-      requiredScopes: () =>
-        getPref("targetBase") ? BITABLE_SCOPES : FEISHU_SCOPES,
+      requiredScopes: requiredFeishuScopes,
     },
   ) {}
 

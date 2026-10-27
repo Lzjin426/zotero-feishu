@@ -1,4 +1,5 @@
 import { version } from "../../package.json";
+import { getPref } from "../utils/prefs";
 import {
   FeishuDeviceProtocol,
   InvalidFeishuApplicationError,
@@ -28,6 +29,19 @@ export const BITABLE_SCOPES = [
   "docs:document.media:upload",
   "offline_access",
 ] as const;
+
+export const READING_NOTES_SCOPES = [
+  ...BITABLE_SCOPES,
+  "docx:document",
+  "wiki:node:read",
+  "wiki:node:create",
+  "wiki:node:update",
+] as const;
+
+export function requiredFeishuScopes(): readonly string[] {
+  if (!getPref("targetBase")) return FEISHU_SCOPES;
+  return getPref("readingNotesParent") ? READING_NOTES_SCOPES : BITABLE_SCOPES;
+}
 
 const ACCOUNTS = "https://accounts.feishu.cn";
 const OPEN = "https://open.feishu.cn";

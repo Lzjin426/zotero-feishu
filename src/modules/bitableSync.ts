@@ -3,6 +3,12 @@ import { FeishuError, FeishuTransport } from "./feishu/transport";
 import { OAuthService } from "./oauthService";
 import type { SyncResult } from "./types";
 import { localItemLink } from "./localLink";
+import {
+  ReadingNotesService,
+  type ReadingNotesCheckpoint,
+  type ReadingNotesInput,
+  type ReadingNotesMapping,
+} from "./readingNotes";
 
 type Json = Record<string, any>;
 interface Field {
@@ -25,10 +31,14 @@ export interface BitableState {
   records: Record<string, string>;
   uploads: Record<string, string>;
   pendingCreates: Record<string, string>;
+  readingNotes?: Record<string, ReadingNotesCheckpoint>;
 }
 export interface BitableSyncDependencies {
   transport: Pick<FeishuTransport, "request" | "mediaRequest">;
-  preference(name: "targetBase" | "targetTable" | "syncPDF"): unknown;
+  preference(
+    name: "targetBase" | "targetTable" | "syncPDF" | "readingNotesParent",
+  ): unknown;
+  readingNote(input: ReadingNotesInput): Promise<ReadingNotesMapping>;
   readState(): Promise<BitableState>;
   writeState(state: BitableState): Promise<void>;
   pdfs(item: Zotero.Item): Promise<BitablePdf[]>;
@@ -82,6 +92,10 @@ export class BitableSyncService {
       now: () => Date.now(),
       uuid: () => (Zotero.getMainWindow() as any).crypto.randomUUID(),
       launch: (url) => Zotero.launchURL(url),
+      readingNote: (input) =>
+        new ReadingNotesService(this.deps.transport, this.deps.uuid).ensure(
+          input,
+        ),
       ...dependencies,
     };
   }
@@ -104,6 +118,14 @@ export class BitableSyncService {
         if (!item.isRegularItem()) throw new Error("只能同步文献条目");
         const target = this.target();
         const schema = await this.schema(target.path);
+        const notesParent = String(
+          this.deps.preference("readingNotesParent") || "",
+        ).trim();
+        if (
+          notesParent &&
+          schema.find((f) => f.field_name === "阅读文档")?.type !== 15
+        )
+          throw new Error("飞书字段缺失或类型不符：阅读文档（应为超链接）");
         const key = `${item.libraryID}:${item.key}`;
         const stateKey = `${target.base}:${target.table}:${key}`;
         const state = await this.deps.readState();
@@ -194,6 +216,59 @@ export class BitableSyncService {
         state.records[stateKey] = recordID;
         delete state.pendingCreates[stateKey];
         await this.deps.writeState(state);
+        if (notesParent) {
+          const notesKey = `${stateKey}:${notesParent}`;
+          const remoteLink = remote?.fields.阅读文档;
+          if (
+            remoteLink != null &&
+            (!remoteLink.link || typeof remoteLink.link !== "string")
+          )
+            throw new Error("阅读文档链接格式无效，已停止以保护现有笔记");
+          const note = await this.deps.readingNote({
+            parentWikiToken: notesParent,
+            sourceKey: stateKey,
+            title: result.title || "未命名文献",
+            zoteroURL: fields["Zotero 条目链接"]?.link || "",
+            baseRecordURL: target.url(recordID),
+            remoteWikiURL: remoteLink?.link,
+            mapping: state.readingNotes?.[notesKey],
+            checkpoint: async (mapping) => {
+              state.readingNotes ||= {};
+              state.readingNotes[notesKey] = mapping;
+              await this.deps.writeState(state);
+            },
+            assertCurrent,
+          });
+          assertCurrent();
+          // Save document identity before replacing the ordinary text title.
+          await this.request(
+            "PUT",
+            `${target.path}/records/${encodeURIComponent(recordID)}`,
+            {
+              fields: { 阅读文档: { text: result.title, link: note.wikiURL } },
+            },
+          );
+          assertCurrent();
+          const title = (result.title || "未命名文献")
+            .replaceAll("\\", "\\\\")
+            .replaceAll("[", "\\[")
+            .replaceAll("]", "\\]")
+            .replace(/[\r\n]+/g, " ");
+          const response = await this.request(
+            "POST",
+            `/base/v3/bases/${target.base}/tables/${target.table}/records/batch_update`,
+            {
+              update_records: {
+                [recordID]: { 文献标题: `[${title}](${note.wikiURL})` },
+              },
+            },
+          );
+          if (
+            response.ignored_fields &&
+            Object.keys(response.ignored_fields).length
+          )
+            throw new Error("飞书未接受文献标题链接，请检查字段写入权限");
+        }
         return {
           ...result,
           outcome: remote ? "updated" : "created",

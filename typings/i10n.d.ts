@@ -18,6 +18,8 @@ export type FluentMessageId =
   | 'pref-connect'
   | 'pref-disconnect'
   | 'pref-open-authorization'
+  | 'pref-reading-notes-help'
+  | 'pref-reading-notes-parent'
   | 'pref-status-authorization-failed'
   | 'pref-status-authorized'
   | 'pref-status-connected-unknown'

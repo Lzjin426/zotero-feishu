@@ -42,6 +42,92 @@ const SCHEMA = [
 ];
 
 describe("BitableSyncService", function () {
+  it("links titles to reusable reading notes and retains handwritten fields", async function () {
+    const f = fixture();
+    f.preferences.readingNotesParent = "https://my.feishu.cn/wiki/parent";
+    f.schema.push({ field_name: "阅读文档", type: 15 });
+    const inputs: any[] = [];
+    const service = f.newService({
+      readingNote: async (input) => {
+        inputs.push(input);
+        const mapping = {
+          state: "ready" as const,
+          sourceKey: input.sourceKey,
+          spaceID: "space",
+          parentWikiToken: "parent",
+          nodeToken: "note",
+          documentID: "doc",
+          wikiURL: "https://my.feishu.cn/wiki/note",
+          initializePending: false,
+          clientToken: "uuid",
+        };
+        await input.checkpoint(mapping);
+        return mapping;
+      },
+    });
+    assert.equal(
+      (await service.syncItem(item("Paper [one]"))).outcome,
+      "created",
+    );
+    f.rows[0].fields.阅读状态 = "已读";
+    f.rows[0].fields.优先级 = "高";
+    assert.equal(
+      (await service.syncItem(item("Revised paper"))).outcome,
+      "updated",
+    );
+    assert.lengthOf(f.rows, 1);
+    assert.equal(f.rows[0].fields.阅读状态, "已读");
+    assert.equal(f.rows[0].fields.优先级, "高");
+    assert.equal(inputs[1].remoteWikiURL, "https://my.feishu.cn/wiki/note");
+    assert.equal(inputs[1].mapping.nodeToken, "note");
+    assert.include(f.titleLinks[0], "Paper \\[one\\]");
+    assert.include(
+      f.titleLinks[1],
+      "[Revised paper](https://my.feishu.cn/wiki/note)",
+    );
+  });
+
+  it("retains note checkpoints when linking the title fails", async function () {
+    const f = fixture();
+    f.preferences.readingNotesParent = "parent";
+    f.schema.push({ field_name: "阅读文档", type: 15 });
+    let calls = 0;
+    const service = f.newService({
+      readingNote: async (input) => {
+        calls++;
+        const mapping = {
+          state: "ready" as const,
+          sourceKey: input.sourceKey,
+          spaceID: "space",
+          parentWikiToken: "parent",
+          nodeToken: "note",
+          documentID: "doc",
+          wikiURL: "https://my.feishu.cn/wiki/note",
+          initializePending: false,
+          clientToken: "uuid",
+        };
+        await input.checkpoint(mapping);
+        return mapping;
+      },
+    });
+    f.failTitleLink = true;
+    assert.equal((await service.syncItem(item())).outcome, "failed");
+    assert.exists(Object.values(f.state().readingNotes || {})[0]);
+    f.failTitleLink = false;
+    assert.equal((await service.syncItem(item())).outcome, "updated");
+    assert.lengthOf(f.rows, 1);
+    assert.equal(calls, 2);
+  });
+
+  it("checks the reading document schema before writing any record", async function () {
+    const f = fixture();
+    f.preferences.readingNotesParent = "parent";
+    const failed = await f.service.syncItem(item());
+    assert.equal(failed.outcome, "failed");
+    assert.include(failed.errors[0], "阅读文档");
+    assert.lengthOf(f.writes, 0);
+  });
+
   it("synchronizes full folder paths as multi-select tags and clears removed memberships", async function () {
     const f = fixture();
     f.schema.push({ field_name: "分类", type: 4 });
@@ -528,6 +614,8 @@ function fixture() {
     rows: [] as Array<{ record_id: string; fields: Json }>,
     writes: [] as Array<{ method: string; path: string; fields: Json }>,
     searches: [] as Json[],
+    titleLinks: [] as string[],
+    failTitleLink: false,
     uploads: [] as Array<{ path: string; form: FormData }>,
     pdfs: [] as BitablePdf[],
     schema: clone(SCHEMA),
@@ -535,6 +623,7 @@ function fixture() {
       targetBase: "https://example.feishu.cn/base/baseTest?table=tblIgnored",
       targetTable: "tblTest",
       syncPDF: true,
+      readingNotesParent: "",
     },
     launched: [] as string[],
     failWrite: false,
@@ -553,6 +642,9 @@ function fixture() {
       new BitableSyncService({} as OAuthService, { ...deps, ...overrides }),
   };
   const deps: BitableSyncDependencies = {
+    readingNote: async () => {
+      throw new Error("Reading notes should be disabled");
+    },
     preference: (name) => f.preferences[name],
     readState: async () => clone(state),
     writeState: async (s) => {
@@ -581,6 +673,21 @@ function fixture() {
             ),
             has_more: false,
           };
+        }
+        if (path.startsWith("/base/v3/")) {
+          if (f.failTitleLink) throw new Error("Title link failed");
+          const updates = (body as Json).update_records;
+          for (const [id, fields] of Object.entries(updates) as [
+            string,
+            Json,
+          ][]) {
+            f.titleLinks.push(fields.文献标题);
+            Object.assign(
+              f.rows.find((r) => r.record_id === id)!.fields,
+              fields,
+            );
+          }
+          return {};
         }
         const fields = clone((body as Json).fields);
         f.writes.push({ method, path, fields });

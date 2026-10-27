@@ -24,9 +24,11 @@ export class FeishuTransport {
     method: string,
     path: string,
     body?: Record<string, unknown>,
+    options?: { retry?: boolean; beforeSend?: () => void | Promise<void> },
   ): Promise<Record<string, unknown>> {
-    return this.retry(async () => {
+    const operation = async () => {
       const token = await this.oauth.getAccessToken();
+      await options?.beforeSend?.();
       try {
         const response = await Zotero.HTTP.request(method, `${API}${path}`, {
           headers: {
@@ -61,7 +63,8 @@ export class FeishuTransport {
         }
         throw error;
       }
-    });
+    };
+    return options?.retry === false ? operation() : this.retry(operation);
   }
 
   async mediaRequest(

@@ -30,7 +30,11 @@ export async function registerPrefsScripts(window: Window): Promise<void> {
   let authorizationPending = false;
 
   targetFolder.value = String(getPref("targetFolder") || "");
-  for (const key of ["targetBase", "targetTable"] as const) {
+  for (const key of [
+    "targetBase",
+    "targetTable",
+    "readingNotesParent",
+  ] as const) {
     const field = input(document, `zotero-feishu-${key}`);
     field.value = String(getPref(key) || "");
     field.addEventListener("change", () => setPref(key, field.value.trim()));
@@ -64,6 +68,10 @@ export async function registerPrefsScripts(window: Window): Promise<void> {
     setPref(
       "targetTable",
       input(document, "zotero-feishu-targetTable").value.trim(),
+    );
+    setPref(
+      "readingNotesParent",
+      input(document, "zotero-feishu-readingNotesParent").value.trim(),
     );
     authorizationPending = true;
     await renderAction(document, action, authorizationPending);

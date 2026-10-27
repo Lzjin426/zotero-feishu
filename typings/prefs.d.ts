@@ -13,6 +13,7 @@ declare namespace _ZoteroTypes {
       "targetTable": string;
       "syncPDF": boolean;
       "autoSync": boolean;
+      "readingNotesParent": string;
       "accessTokenExpiresAt": string;
     };
   }

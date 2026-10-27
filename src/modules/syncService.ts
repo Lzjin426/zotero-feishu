@@ -123,6 +123,7 @@ export class SyncService {
       getPref("targetTable"),
       getPref("targetFolder"),
       getPref("syncPDF"),
+      getPref("readingNotesParent"),
     ]);
   }
 
