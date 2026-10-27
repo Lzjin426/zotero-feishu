@@ -34,8 +34,10 @@ export const READING_NOTES_SCOPES = [
   ...BITABLE_SCOPES,
   "docx:document",
   "wiki:node:read",
+  "wiki:node:retrieve",
   "wiki:node:create",
   "wiki:node:update",
+  "base:record:update",
 ] as const;
 
 export function requiredFeishuScopes(): readonly string[] {

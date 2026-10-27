@@ -2,6 +2,7 @@ import { assert } from "chai";
 import {
   FEISHU_SCOPES,
   BITABLE_SCOPES,
+  READING_NOTES_SCOPES,
   FeishuDeviceAuth,
   InvalidFeishuApplicationError,
   MissingAppPermissionsError,
@@ -17,6 +18,39 @@ interface RequestRecord {
 }
 
 describe("FeishuDeviceAuth", function () {
+  it("requests node retrieval and Base v3 title-link permissions for reading notes", async function () {
+    const fake = createFake([
+      ok({
+        device_code: "notes-code",
+        verification_uri_complete: "https://example.test/authorize",
+        interval: 1,
+        expires_in: 30,
+      }),
+      ok({
+        access_token: "access",
+        refresh_token: "refresh",
+        expires_in: 7200,
+        refresh_token_expires_in: 604800,
+        scope: READING_NOTES_SCOPES.join(" "),
+      }),
+    ]);
+    await new FeishuDeviceAuth(
+      fake.dependencies,
+      () => READING_NOTES_SCOPES,
+    ).authorizeUser({ appId: "cli_test", appSecret: "secret" });
+    const requested = new URLSearchParams(fake.requests[0].body)
+      .get("scope")!
+      .split(" ");
+    assert.includeMembers(requested, [
+      "wiki:node:retrieve",
+      "wiki:node:read",
+      "wiki:node:create",
+      "wiki:node:update",
+      "base:record:update",
+      "docx:document",
+    ]);
+  });
+
   it("requests only Base and media permissions in Base mode", async function () {
     const fake = createFake([
       ok({
