@@ -3,6 +3,7 @@ import hooks from "./hooks";
 import { SyncService } from "./modules/syncService";
 import { SyncStatusService } from "./modules/syncStatus";
 import { createZToolkit } from "./utils/ztoolkit";
+import { AutoSyncService } from "./modules/autoSync";
 
 class Addon {
   public data: {
@@ -22,6 +23,7 @@ class Addon {
   public hooks: typeof hooks;
   public sync: SyncService;
   public syncStatus: SyncStatusService;
+  public autoSync: AutoSyncService;
   // APIs
   public api: object;
 
@@ -36,6 +38,7 @@ class Addon {
     this.hooks = hooks;
     this.sync = new SyncService();
     this.syncStatus = new SyncStatusService();
+    this.autoSync = new AutoSyncService();
     this.api = {};
   }
 }

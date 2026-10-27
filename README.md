@@ -1,6 +1,66 @@
 # Zotero Feishu Sync
 
+> Local adaptation, version 0.7.1-fullstop.1, based on
+> [wu-uk/zotero-feishu](https://github.com/wu-uk/zotero-feishu) v0.7.0.
+> Adds Feishu Base synchronization and Zotero 10 support. This adaptation is
+> distributed with its complete source under the original AGPL-3.0-or-later license.
+
 [简体中文](doc/README-zhCN.md)
+
+## Base synchronization in this adaptation
+
+Build this adaptation from [this fork](https://github.com/Lzjin426/zotero-feishu):
+run `npm ci` and `npm run build`, then install
+`.scaffold/build/zotero-feishu-sync.xpi` in Zotero. Upstream releases do not contain
+this adaptation's Base support. In Zotero
+Settings → Zotero Feishu Sync, enter the Base URL and table ID, connect Feishu,
+and enable automatic synchronization and PDF uploads. New and modified items in
+My Library synchronize while Zotero is running. Startup catches up the existing
+personal library. Right-click items or a collection for manual synchronization.
+
+The Base schema uses Chinese field names configured for the literature library.
+Create the following fields with these exact names before connecting:
+
+| Field           | Feishu field type                                 |
+| --------------- | ------------------------------------------------- |
+| 文献标题        | Text (primary field)                              |
+| 作者            | Text                                              |
+| 年份            | Number or text                                    |
+| 期刊或会议      | Text                                              |
+| 摘要            | Text                                              |
+| DOI             | URL                                               |
+| 原文链接        | URL                                               |
+| Zotero 条目链接 | URL                                               |
+| Zotero 分类     | Text                                              |
+| Zotero 标签     | Text                                              |
+| Zotero 唯一标识 | Text                                              |
+| 最近同步时间    | Date, with time                                   |
+| PDF 附件        | Attachment, required when PDF uploads are enabled |
+
+Open the target data table in Feishu. A link shaped like
+`https://example.feishu.cn/base/BASE_TOKEN?table=tblTABLE_ID&view=VIEW_ID`
+contains the Base URL (`https://example.feishu.cn/base/BASE_TOKEN`) and the
+table ID (`tblTABLE_ID`). Use a `/base/` link; `/wiki/` links must first be resolved
+to the underlying Base. Reading-management fields can be added independently.
+
+Bibliographic fields and locally available PDFs come from Zotero. Reading status,
+priority, research questions, findings, limitations, and reading notes remain
+owned by the reader and are never overwritten by synchronization. No reverse
+synchronization or automatic deletion of remote records is performed. Updates to
+PDF contents append a new attachment while preserving existing files.
+
+Without a Zotero cloud account, the item link opens the source item through a
+navigation-only loopback endpoint in this plugin. It requires Zotero to be running
+on the same computer. Feishu record links do not require a separate synchronization
+server. Cloud credentials remain in Zotero's Firefox Login Manager, and synchronization
+state remains in the Zotero profile. This local build intentionally omits the
+upstream automatic update URL so an upstream update cannot remove Base support.
+
+Base mode requests only `bitable:app`, `docs:document.media:upload`, and
+`offline_access`. Switching to the original document mode requires reconnecting
+to grant that mode's permissions.
+
+The following sections describe the original document synchronization mode.
 
 Zotero Feishu Sync is an unofficial Zotero plugin that publishes literature
 metadata, notes, images, and PDF attachments to Feishu cloud documents. Zotero
@@ -9,14 +69,15 @@ plugin-managed content in its mapped Feishu document.
 
 ## Requirements
 
-- Zotero 8-9. Release validation is performed on Zotero 9.
+- The upstream plugin supports Zotero 8–9; this adaptation is tested on Zotero 10.0.6.
 - A mainland Feishu account that can create a personal application and grant
   the requested permissions. Tenant policy may require administrator approval.
 - Local PDF and note-image files must be available to Zotero when synchronizing.
 
 ## Installation
 
-1. Download `zotero-feishu-sync.xpi` from the latest GitHub Release.
+1. For this adaptation, build the XPI as described above. The original document-only
+   plugin is available from the [upstream releases](https://github.com/wu-uk/zotero-feishu/releases).
 2. In Zotero, open **Tools → Plugins**.
 3. Choose **Install Add-on From File**, select the XPI, and restart Zotero if
    requested.

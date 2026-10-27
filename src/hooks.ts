@@ -1,6 +1,7 @@
 import { getLocaleID, initLocale } from "./utils/locale";
 import { registerPrefsScripts } from "./modules/preferenceScript";
 import { registerMenus, unregisterMenus } from "./modules/menu";
+import { registerLocalLink, unregisterLocalLink } from "./modules/localLink";
 
 const preferencePaneID = "zotero-feishu-preferences";
 
@@ -45,6 +46,8 @@ async function onStartup() {
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
   );
   addon.data.initialized = true;
+  registerLocalLink();
+  addon.autoSync.register();
 }
 
 async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
@@ -61,6 +64,8 @@ async function onMainWindowUnload(win: Window): Promise<void> {
 }
 
 function onShutdown(): void {
+  unregisterLocalLink();
+  addon.autoSync.unregister();
   unregisterPreferencePane();
   addon.sync.unregister();
   addon.syncStatus.unregister();

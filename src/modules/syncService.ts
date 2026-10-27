@@ -7,6 +7,7 @@ import {
 } from "./feishuClient";
 import { OAuthService } from "./oauthService";
 import { StateStore } from "./stateStore";
+import { BitableSyncService } from "./bitableSync";
 import type {
   DocumentModel,
   DocumentSection,
@@ -62,37 +63,73 @@ export class SyncService {
     item: Zotero.Item,
   ) => Promise<DocumentModel>;
   private readonly itemOperations = new Map<string, Promise<void>>();
+  private readonly bitable: BitableSyncService;
+  private stopped = false;
 
   constructor(dependencies: SyncServiceDependencies = {}) {
     this.oauth = dependencies.oauth || new OAuthService();
     this.state = dependencies.state || new StateStore();
     this.client = dependencies.client || new FeishuClient(this.oauth);
+    this.bitable = new BitableSyncService(this.oauth);
     this.documentBuilder = dependencies.buildDocument || buildDocument;
   }
 
   unregister(): void {
-    this.oauth.cancelPendingAuthorization();
+    this.stopped = true;
+    this.oauth.dispose();
   }
 
   async syncItems(
     input: Zotero.Item[],
     onProgress?: ProgressCallback,
+    shouldContinue: () => boolean = () => true,
   ): Promise<SyncResult[]> {
+    const configuration = this.configuration();
     const items = uniqueRegularUserItems(input);
     const results: SyncResult[] = [];
     for (const item of items) {
-      const result = await this.syncItem(item);
+      if (!shouldContinue()) throw new Error("自动同步已关闭，已停止剩余文献");
+      this.assertConfiguration(configuration);
+      const result = await this.syncItem(item, configuration, shouldContinue);
       results.push(result);
       onProgress?.(results.length, items.length, result);
     }
     return results;
   }
 
-  async syncItem(item: Zotero.Item): Promise<SyncResult> {
+  async syncItem(
+    item: Zotero.Item,
+    configuration = this.configuration(),
+    shouldContinue: () => boolean = () => true,
+  ): Promise<SyncResult> {
     const topLevelItem = resolveTopLevelItem(item);
-    return this.withItemOperation(topLevelItem, () =>
-      this.performSyncItem(topLevelItem),
-    );
+    return this.withItemOperation(topLevelItem, () => {
+      this.assertConfiguration(configuration);
+      const assertCurrent = () => {
+        this.assertConfiguration(configuration);
+        if (!shouldContinue())
+          throw new Error("自动同步已关闭，已停止剩余文献");
+      };
+      assertCurrent();
+      return getPref("targetBase")
+        ? this.bitable.syncItem(topLevelItem, assertCurrent)
+        : this.performSyncItem(topLevelItem);
+    });
+  }
+
+  private configuration(): string {
+    return JSON.stringify([
+      getPref("targetBase"),
+      getPref("targetTable"),
+      getPref("targetFolder"),
+      getPref("syncPDF"),
+    ]);
+  }
+
+  private assertConfiguration(expected: string): void {
+    if (this.stopped) throw new Error("插件已关闭，已停止同步");
+    if (this.configuration() !== expected)
+      throw new Error("同步位置已改变，已停止原批次，请重新同步");
   }
 
   private async performSyncItem(item: Zotero.Item): Promise<SyncResult> {
@@ -191,6 +228,9 @@ export class SyncService {
   }
 
   async deleteItem(item: Zotero.Item): Promise<boolean> {
+    if (getPref("targetBase")) {
+      throw new Error("请在飞书表格中手动删除记录；插件不会自动删除阅读笔记。");
+    }
     const topLevelItem = resolveTopLevelItem(item);
     return this.withItemOperation(topLevelItem, () =>
       this.performDeleteItem(topLevelItem),
@@ -232,6 +272,7 @@ export class SyncService {
 
   async openItem(item: Zotero.Item): Promise<boolean> {
     const topLevelItem = resolveTopLevelItem(item);
+    if (getPref("targetBase")) return this.bitable.openItem(topLevelItem);
     const record = await this.state.get(
       topLevelItem.libraryID,
       topLevelItem.key,
@@ -242,6 +283,7 @@ export class SyncService {
   }
 
   async testConnection(): Promise<void> {
+    if (getPref("targetBase")) return this.bitable.testConnection();
     await this.client.testConnection(configuredFolder());
   }
 

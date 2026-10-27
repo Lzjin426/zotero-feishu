@@ -2,6 +2,8 @@ import { getPref, setPref } from "../utils/prefs";
 import { CredentialStore } from "./credentialStore";
 import {
   FeishuDeviceAuth,
+  BITABLE_SCOPES,
+  FEISHU_SCOPES,
   InvalidFeishuApplicationError,
   type ProgressCallback,
   type RegisteredApp,
@@ -21,6 +23,7 @@ interface TokenResponse {
 export interface OAuthServiceDependencies {
   requestToken(body: Record<string, string>): Promise<unknown>;
   now(): number;
+  requiredScopes?(): readonly string[];
 }
 
 export class AuthorizationChangedError extends Error {}
@@ -29,13 +32,18 @@ export class OAuthService {
   private pending?: AbortController;
   private refreshPromise?: Promise<OAuthTokens>;
   private authorizationEpoch = 0;
+  private disposed = false;
 
   constructor(
-    private readonly deviceAuth = new FeishuDeviceAuth(),
+    private readonly deviceAuth = new FeishuDeviceAuth(undefined, () =>
+      getPref("targetBase") ? BITABLE_SCOPES : FEISHU_SCOPES,
+    ),
     private readonly credentials = new CredentialStore(),
     private readonly dependencies: OAuthServiceDependencies = {
       requestToken: tokenRequest,
       now: () => Date.now(),
+      requiredScopes: () =>
+        getPref("targetBase") ? BITABLE_SCOPES : FEISHU_SCOPES,
     },
   ) {}
 
@@ -58,8 +66,11 @@ export class OAuthService {
   }
 
   async getAccessToken(): Promise<string> {
+    if (this.disposed) throw new Error("同步插件已关闭");
     const tokens = this.credentials.getTokens();
     if (!tokens) throw new Error("Feishu account is not authorized");
+    if (!this.hasRequiredScopes(tokens))
+      throw new Error("同步模式已改变，请在设置中重新连接飞书以授权所需权限");
     if (tokens.expiresAt > this.dependencies.now() + 60_000) {
       return tokens.accessToken;
     }
@@ -76,7 +87,23 @@ export class OAuthService {
   }
 
   isAuthorized(): boolean {
-    return Boolean(this.credentials.getTokens()?.refreshToken);
+    const tokens = this.credentials.getTokens();
+    return Boolean(
+      !this.disposed && tokens?.refreshToken && this.hasRequiredScopes(tokens),
+    );
+  }
+
+  private hasRequiredScopes(tokens: OAuthTokens): boolean {
+    const granted = new Set(tokens.scope.split(/\s+/));
+    return (this.dependencies.requiredScopes?.() || []).every(
+      (scope) => scope === "offline_access" || granted.has(scope),
+    );
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.authorizationEpoch++;
+    this.cancelPendingAuthorization();
   }
 
   clearAuthorization(): void {

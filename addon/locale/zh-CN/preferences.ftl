@@ -1,10 +1,16 @@
 pref-account-title = 飞书账号
 pref-target-title = 同步位置
+pref-target-base = 多维表格链接
+pref-target-table = 数据表 ID
+pref-bitable-help = 填写多维表格后，同步到文献记录；保留阅读状态和手写笔记。留空则使用原版飞书文档同步。
+pref-auto-sync = 新增或修改文献时自动同步（Zotero 运行时）
+pref-sync-pdf = 同步本地 PDF 附件
 pref-target-folder = 目标文件夹链接或 Token
 pref-target-folder-help = ?
 pref-target-folder-help-tooltip = 可选。留空时同步到“我的空间”根目录。
 pref-target-folder-help-label = 同步位置说明
 pref-connect = 连接飞书
+pref-open-authorization = 打开飞书授权页面
 pref-disconnect = 断开连接
 pref-cancel = 取消
 pref-status-not-connected = 未连接

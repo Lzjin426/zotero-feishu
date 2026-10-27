@@ -30,6 +30,16 @@ export async function registerPrefsScripts(window: Window): Promise<void> {
   let authorizationPending = false;
 
   targetFolder.value = String(getPref("targetFolder") || "");
+  for (const key of ["targetBase", "targetTable"] as const) {
+    const field = input(document, `zotero-feishu-${key}`);
+    field.value = String(getPref(key) || "");
+    field.addEventListener("change", () => setPref(key, field.value.trim()));
+  }
+  for (const key of ["syncPDF", "autoSync"] as const) {
+    const field = input(document, `zotero-feishu-${key}`);
+    field.checked = Boolean(getPref(key));
+    field.addEventListener("change", () => setPref(key, field.checked));
+  }
   await renderConnectionStatus(document, status);
   await renderAction(document, action, authorizationPending);
 
@@ -47,6 +57,14 @@ export async function registerPrefsScripts(window: Window): Promise<void> {
     }
 
     saveTargetFolder(targetFolder.value);
+    setPref(
+      "targetBase",
+      input(document, "zotero-feishu-targetBase").value.trim(),
+    );
+    setPref(
+      "targetTable",
+      input(document, "zotero-feishu-targetTable").value.trim(),
+    );
     authorizationPending = true;
     await renderAction(document, action, authorizationPending);
     try {
@@ -156,6 +174,12 @@ async function renderProgress(
   status: StatusElements,
   progress: AuthorizationProgress,
 ): Promise<void> {
+  const authLink = document.getElementById(
+    "zotero-feishu-auth-link",
+  ) as HTMLAnchorElement;
+  const authURL = progress.verificationUrl || progress.consoleUrl;
+  authLink.hidden = !authURL;
+  if (authURL) authLink.href = authURL;
   const detailId = `pref-status-${progress.phase.replaceAll("_", "-")}`;
   if (progress.phase === "waiting_app_permissions") {
     await setStatus(

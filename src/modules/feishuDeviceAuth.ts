@@ -19,6 +19,13 @@ export const FEISHU_SCOPES = [
   "drive:file:upload",
   "drive:drive.metadata:readonly",
   "space:document:delete",
+  "bitable:app",
+  "offline_access",
+] as const;
+
+export const BITABLE_SCOPES = [
+  "bitable:app",
+  "docs:document.media:upload",
   "offline_access",
 ] as const;
 
@@ -76,6 +83,7 @@ export class FeishuDeviceAuth {
 
   constructor(
     private readonly dependencies: DeviceAuthDependencies = defaultDependencies(),
+    private readonly scopes: () => readonly string[] = () => FEISHU_SCOPES,
   ) {
     this.protocol = new FeishuDeviceProtocol(dependencies);
   }
@@ -126,12 +134,13 @@ export class FeishuDeviceAuth {
     signal?: AbortSignal,
   ): Promise<DeviceTokenResponse> {
     assertActive(signal);
+    const scopes = this.scopes();
     onProgress?.({ phase: "requesting_user_authorization" });
     const response = await this.protocol.formRequest(
       DEVICE_AUTHORIZATION_URL,
       {
         client_id: app.appId,
-        scope: FEISHU_SCOPES.join(" "),
+        scope: scopes.join(" "),
       },
       {
         Authorization: `Basic ${base64(`${app.appId}:${app.appSecret}`)}`,
@@ -146,7 +155,7 @@ export class FeishuDeviceAuth {
       if (!isPermissionFailure(response.data)) throw error;
       this.openPermissionSettings(
         app.appId,
-        permissionScopes(response.data),
+        permissionScopes(response.data, scopes),
         onProgress,
       );
     }
@@ -177,7 +186,7 @@ export class FeishuDeviceAuth {
     if (!token.access_token || !token.refresh_token) {
       throw new Error("Feishu returned an incomplete OAuth token response");
     }
-    const missingScopes = missingGrantedScopes(token.scope || "");
+    const missingScopes = missingGrantedScopes(token.scope || "", scopes);
     if (missingScopes.length) {
       this.openPermissionSettings(app.appId, missingScopes, onProgress);
     }
@@ -246,9 +255,12 @@ function numberValue(value: unknown, fallback: number): number {
   return typeof value === "number" && value > 0 ? value : fallback;
 }
 
-function missingGrantedScopes(scope: string): string[] {
+function missingGrantedScopes(
+  scope: string,
+  requiredScopes: readonly string[],
+): string[] {
   const granted = new Set(scope.split(/[\s,]+/).filter(Boolean));
-  return FEISHU_SCOPES.filter(
+  return requiredScopes.filter(
     (required) => required !== "offline_access" && !granted.has(required),
   );
 }
@@ -272,9 +284,12 @@ function responseMessage(data: any): string {
   );
 }
 
-function permissionScopes(data: any): string[] {
+function permissionScopes(
+  data: any,
+  requiredScopes: readonly string[],
+): string[] {
   const description = JSON.stringify(data || {});
-  const mentioned = FEISHU_SCOPES.filter(
+  const mentioned = requiredScopes.filter(
     (scope) =>
       scope !== "offline_access" &&
       new RegExp(
@@ -284,7 +299,7 @@ function permissionScopes(data: any): string[] {
   );
   return mentioned.length
     ? mentioned
-    : FEISHU_SCOPES.filter((scope) => scope !== "offline_access");
+    : requiredScopes.filter((scope) => scope !== "offline_access");
 }
 
 function escapeRegExp(value: string): string {

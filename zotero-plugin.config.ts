@@ -40,8 +40,11 @@ export default defineConfig({
   },
 
   test: {
+    watch: false,
     waitForPlugin: `() => Zotero.${pkg.config.addonInstance}.data.initialized`,
   },
+
+  server: { devtools: false },
 
   release: {
     bumpp: {

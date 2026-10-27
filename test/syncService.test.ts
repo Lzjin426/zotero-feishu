@@ -1,4 +1,5 @@
 import { assert } from "chai";
+import { getPref, setPref } from "../src/utils/prefs";
 import {
   SyncService,
   type SyncClient,
@@ -23,6 +24,61 @@ const MODEL: DocumentModel = {
 };
 
 describe("SyncService", function () {
+  it("stops a batch before any item reaches a changed destination", async function () {
+    const original = getPref("targetFolder");
+    let writes = 0;
+    const service = createService(
+      new MemoryState(),
+      fakeClient({
+        syncDocumentSections: async () => {
+          writes++;
+          setPref("targetFolder", "changed-target");
+          return writeResult(true);
+        },
+      }),
+    );
+    const first = fakeItem();
+    const second = { ...fakeItem(), key: "ITEM5678" } as Zotero.Item;
+    let error: unknown;
+    try {
+      await service.syncItems([first, second]);
+    } catch (caught) {
+      error = caught;
+    } finally {
+      setPref("targetFolder", original);
+    }
+    assert.instanceOf(error, Error);
+    assert.include((error as Error).message, "同步位置已改变");
+    assert.equal(writes, 1);
+  });
+
+  it("stops the rest of a batch when automatic synchronization is disabled", async function () {
+    let enabled = true;
+    let writes = 0;
+    const service = createService(
+      new MemoryState(),
+      fakeClient({
+        syncDocumentSections: async () => {
+          writes++;
+          enabled = false;
+          return writeResult(true);
+        },
+      }),
+    );
+    let error: unknown;
+    try {
+      await service.syncItems(
+        [fakeItem(), { ...fakeItem(), key: "ITEM5678" } as Zotero.Item],
+        undefined,
+        () => enabled,
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    assert.instanceOf(error, Error);
+    assert.equal(writes, 1);
+  });
+
   it("recreates an unchanged item when its Feishu document was deleted", async function () {
     const state = new MemoryState(record("deleted-document", MODEL.sourceHash));
     const calls = { create: 0, write: [] as string[] };

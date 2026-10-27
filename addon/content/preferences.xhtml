@@ -37,6 +37,11 @@
           />
         </html:div>
         <html:p id="zotero-feishu-status-detail" hidden="true" />
+        <html:a
+          id="zotero-feishu-auth-link"
+          hidden="true"
+          data-l10n-id="pref-open-authorization"
+        />
       </html:div>
     </html:div>
   </html:section>
@@ -51,6 +56,31 @@
         data-l10n-id="pref-target-title"
       />
       <html:span id="zotero-feishu-target-help-placeholder" />
+    </html:div>
+    <html:div class="settings-field">
+      <html:label
+        for="zotero-feishu-targetBase"
+        data-l10n-id="pref-target-base"
+      />
+      <html:input id="zotero-feishu-targetBase" type="text" />
+    </html:div>
+    <html:div class="settings-field">
+      <html:label
+        for="zotero-feishu-targetTable"
+        data-l10n-id="pref-target-table"
+      />
+      <html:input id="zotero-feishu-targetTable" type="text" />
+    </html:div>
+    <html:p data-l10n-id="pref-bitable-help" />
+    <html:div class="settings-field">
+      <html:label>
+        <html:input id="zotero-feishu-autoSync" type="checkbox" />
+        <html:span data-l10n-id="pref-auto-sync" />
+      </html:label>
+      <html:label>
+        <html:input id="zotero-feishu-syncPDF" type="checkbox" />
+        <html:span data-l10n-id="pref-sync-pdf" />
+      </html:label>
     </html:div>
     <html:div class="settings-field">
       <html:label

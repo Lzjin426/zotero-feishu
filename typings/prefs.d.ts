@@ -9,6 +9,10 @@ declare namespace _ZoteroTypes {
     PluginPrefsMap: {
       "appId": string;
       "targetFolder": string;
+      "targetBase": string;
+      "targetTable": string;
+      "syncPDF": boolean;
+      "autoSync": boolean;
       "accessTokenExpiresAt": string;
     };
   }

@@ -1,6 +1,7 @@
 import { assert } from "chai";
 import {
   FEISHU_SCOPES,
+  BITABLE_SCOPES,
   FeishuDeviceAuth,
   InvalidFeishuApplicationError,
   MissingAppPermissionsError,
@@ -16,6 +17,36 @@ interface RequestRecord {
 }
 
 describe("FeishuDeviceAuth", function () {
+  it("requests only Base and media permissions in Base mode", async function () {
+    const fake = createFake([
+      ok({
+        device_code: "login-code",
+        verification_uri_complete: "https://example.test/authorize",
+        interval: 1,
+        expires_in: 30,
+      }),
+      ok({
+        access_token: "access",
+        refresh_token: "refresh",
+        expires_in: 7200,
+        refresh_token_expires_in: 604800,
+        scope: BITABLE_SCOPES.join(" "),
+      }),
+    ]);
+    await new FeishuDeviceAuth(
+      fake.dependencies,
+      () => BITABLE_SCOPES,
+    ).authorizeUser({
+      appId: "cli_test",
+      appSecret: "secret",
+    });
+    assert.include(
+      decodeURIComponent(fake.requests[0].body || ""),
+      `scope=${BITABLE_SCOPES.join(" ")}`,
+    );
+    assert.notInclude(fake.requests[0].body || "", "delete");
+  });
+
   it("registers a PersonalAgent app through the browser flow", async function () {
     const fake = createFake([
       ok({

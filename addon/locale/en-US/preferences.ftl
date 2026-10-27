@@ -1,10 +1,16 @@
 pref-account-title = Feishu account
 pref-target-title = Sync location
+pref-target-base = Base URL
+pref-target-table = Table ID
+pref-bitable-help = When a Base is configured, sync to literature records and preserve reading status and personal notes. Leave empty to use the original document synchronization.
+pref-auto-sync = Automatically sync new and modified items while Zotero is running
+pref-sync-pdf = Upload local PDF attachments
 pref-target-folder = Target folder URL or token
 pref-target-folder-help = ?
 pref-target-folder-help-tooltip = Optional. Leave empty to sync to the root of My Space.
 pref-target-folder-help-label = Sync location help
 pref-connect = Connect Feishu
+pref-open-authorization = Open Feishu authorization page
 pref-disconnect = Disconnect
 pref-cancel = Cancel
 pref-status-not-connected = Not connected

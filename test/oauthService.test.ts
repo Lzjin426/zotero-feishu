@@ -8,6 +8,48 @@ import {
 import type { OAuthTokens } from "../src/modules/types";
 
 describe("OAuthService", function () {
+  it("requires fresh authorization after switching to an ungranted mode", async function () {
+    const credentials = new MemoryCredentials({
+      ...expiredTokens(),
+      expiresAt: 1_000_000,
+    });
+    const service = new OAuthService(
+      undefined,
+      credentials as unknown as CredentialStore,
+      {
+        now: () => 0,
+        requestToken: async () => {
+          throw new Error("Should not refresh");
+        },
+        requiredScopes: () => ["bitable:app"],
+      },
+    );
+    assert.isFalse(service.isAuthorized());
+    let error: unknown;
+    try {
+      await service.getAccessToken();
+    } catch (caught) {
+      error = caught;
+    }
+    assert.include((error as Error).message, "重新连接飞书");
+    assert.exists(credentials.tokens);
+  });
+
+  it("stops token access after plugin shutdown", async function () {
+    const service = new OAuthService(
+      undefined,
+      new MemoryCredentials(expiredTokens()) as unknown as CredentialStore,
+    );
+    service.dispose();
+    let error: unknown;
+    try {
+      await service.getAccessToken();
+    } catch (caught) {
+      error = caught;
+    }
+    assert.include((error as Error).message, "已关闭");
+  });
+
   afterEach(function () {
     setPref("appId", "");
     setPref("accessTokenExpiresAt", "0");
