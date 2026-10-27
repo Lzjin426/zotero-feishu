@@ -42,6 +42,66 @@ const SCHEMA = [
 ];
 
 describe("BitableSyncService", function () {
+  it("synchronizes full folder paths as multi-select tags and clears removed memberships", async function () {
+    const f = fixture();
+    f.schema.push({ field_name: "分类", type: 4 });
+    const root = new Zotero.Collection();
+    root.name = "Gearbox";
+    await root.saveTx();
+    const child = new Zotero.Collection();
+    child.name = "Optimization; methods";
+    child.parentID = root.id;
+    await child.saveTx();
+    const paper = item();
+    let membership = [root.id, child.id, child.id];
+    paper.getCollections = () => membership;
+    try {
+      assert.equal((await f.service.syncItem(paper)).outcome, "created");
+      assert.deepEqual(f.rows[0].fields.分类, [
+        "Gearbox",
+        "Gearbox / Optimization; methods",
+      ]);
+      f.rows[0].fields.阅读状态 = "已读";
+      f.rows[0].fields.优先级 = "高";
+      root.name = "Drivetrain";
+      await root.saveTx();
+      membership = [child.id];
+      await f.service.syncItem(paper);
+      assert.deepEqual(f.rows[0].fields.分类, [
+        "Drivetrain / Optimization; methods",
+      ]);
+      child.parentID = false;
+      await child.saveTx();
+      membership = [child.id];
+      assert.equal((await f.service.syncItem(paper)).outcome, "updated");
+      assert.deepEqual(f.rows[0].fields.分类, ["Optimization; methods"]);
+      assert.equal(f.rows[0].fields["Zotero 分类"], "Optimization; methods");
+      membership = [root.id];
+      await f.service.syncItem(paper);
+      assert.deepEqual(f.rows[0].fields.分类, ["Drivetrain"]);
+      membership = [];
+      await f.service.syncItem(paper);
+      assert.deepEqual(f.rows[0].fields.分类, []);
+      assert.equal(f.rows[0].fields.阅读状态, "已读");
+      assert.equal(f.rows[0].fields.优先级, "高");
+      assert.lengthOf(f.rows, 1);
+    } finally {
+      await child.eraseTx();
+      await root.eraseTx();
+    }
+  });
+
+  it("keeps old tables compatible and rejects a wrongly typed classification column", async function () {
+    const f = fixture();
+    assert.equal((await f.service.syncItem(item())).outcome, "created");
+    assert.notProperty(f.writes[0].fields, "分类");
+    f.schema.push({ field_name: "分类", type: 1 });
+    const failed = await f.service.syncItem(item());
+    assert.equal(failed.outcome, "failed");
+    assert.include(failed.errors[0], "分类（应为多选）");
+    assert.lengthOf(f.writes, 1);
+  });
+
   it("rechecks the destination after waiting in the global write queue", async function () {
     const f = fixture();
     let release!: () => void;

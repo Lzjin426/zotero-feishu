@@ -1,6 +1,6 @@
 # Zotero Feishu Sync
 
-> Local adaptation, version 0.7.1-fullstop.1, based on
+> Local adaptation, version 0.7.1-fullstop.2, based on
 > [wu-uk/zotero-feishu](https://github.com/wu-uk/zotero-feishu) v0.7.0.
 > Adds Feishu Base synchronization and Zotero 10 support. This adaptation is
 > distributed with its complete source under the original AGPL-3.0-or-later license.
@@ -36,6 +36,13 @@ Create the following fields with these exact names before connecting:
 | Zotero 唯一标识 | Text                                              |
 | 最近同步时间    | Date, with time                                   |
 | PDF 附件        | Attachment, required when PDF uploads are enabled |
+
+An optional **分类** multi-select column displays Zotero folder paths as colored
+tags. When present, the plugin updates it on every sync, including renamed or moved
+folders and removed memberships. New paths become new options automatically. A
+paper in several folders gets several tags; no folder membership means no tags.
+Use Zotero to edit this column's contents. Keep **Zotero 分类** as a text column
+for compatibility. Tables without the optional **分类** column continue to work.
 
 Open the target data table in Feishu. A link shaped like
 `https://example.feishu.cn/base/BASE_TOKEN?table=tblTABLE_ID&view=VIEW_ID`

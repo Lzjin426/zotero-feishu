@@ -108,7 +108,10 @@ export class BitableSyncService {
         const stateKey = `${target.base}:${target.table}:${key}`;
         const state = await this.deps.readState();
         let remote = await this.find(target.path, key);
-        const fields = sourceFields(item);
+        const fields = sourceFields(
+          item,
+          schema.some((f) => f.field_name === "分类"),
+        );
         if (schema.find((f) => f.field_name === "年份")?.type === 2) {
           fields.年份 = fields.年份 ? Number(fields.年份) : null;
         }
@@ -272,6 +275,12 @@ export class BitableSyncService {
       if (matches.length !== 1 || !types.includes(matches[0].type))
         throw new Error(`飞书字段缺失或类型不符：${name}`);
     }
+    const classification = fields.filter((f) => f.field_name === "分类");
+    if (
+      classification.length > 1 ||
+      (classification.length === 1 && classification[0].type !== 4)
+    )
+      throw new Error("飞书字段类型不符：分类（应为多选）");
     return fields;
   }
 
@@ -448,7 +457,8 @@ function link(value: string): { text: string; link: string } | null {
     return null;
   }
 }
-function sourceFields(item: Zotero.Item): Json {
+function sourceFields(item: Zotero.Item, includeClassification = false): Json {
+  const collections = collectionPaths(item);
   const doi = field(item, "DOI")
     .replace(/^(?:doi:\s*|https?:\/\/(?:dx\.)?doi\.org\/)/i, "")
     .trim();
@@ -470,29 +480,16 @@ function sourceFields(item: Zotero.Item): Json {
     摘要: field(item, "abstractNote"),
     DOI: doi ? link(`https://doi.org/${doi}`) : null,
     原文链接: link(field(item, "url")),
-    "Zotero 分类": item
-      .getCollections()
-      .map((id) => {
-        const names: string[] = [];
-        let collection: Zotero.Collection | false = Zotero.Collections.get(id);
-        const seen = new Set<number>();
-        while (collection) {
-          if (seen.has(collection.id)) throw new Error("Zotero 分类层级循环");
-          seen.add(collection.id);
-          names.unshift(collection.name);
-          collection = collection.parentID
-            ? Zotero.Collections.get(collection.parentID)
-            : false;
-        }
-        return names.join(" / ");
-      })
-      .join("; "),
+    "Zotero 分类": collections.join("; "),
     "Zotero 标签": item
       .getTags()
       .map((t) => t.tag)
       .join("; "),
     [UNIQUE]: `${item.libraryID}:${item.key}`,
   };
+  // Native multi-select values keep folder names containing semicolons intact.
+  // Zotero owns this column, so an empty array also clears stale membership.
+  if (includeClassification) fields.分类 = collections;
   if (item.libraryID === Zotero.Libraries.userLibraryID) {
     const userID = Zotero.Users.getCurrentUserID();
     if (userID)
@@ -508,6 +505,30 @@ function sourceFields(item: Zotero.Item): Json {
       );
   }
   return fields;
+}
+function collectionPaths(item: Zotero.Item): string[] {
+  return Array.from(
+    new Set(
+      item
+        .getCollections()
+        .map((id) => {
+          const names: string[] = [];
+          let collection: Zotero.Collection | false =
+            Zotero.Collections.get(id);
+          const seen = new Set<number>();
+          while (collection) {
+            if (seen.has(collection.id)) throw new Error("Zotero 分类层级循环");
+            seen.add(collection.id);
+            names.unshift(collection.name);
+            collection = collection.parentID
+              ? Zotero.Collections.get(collection.parentID)
+              : false;
+          }
+          return names.join(" / ");
+        })
+        .filter(Boolean),
+    ),
+  );
 }
 function io(): any {
   return ztoolkit.getGlobal("IOUtils");
